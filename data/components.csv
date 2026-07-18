@@ -1,0 +1,28 @@
+sep=, 
+id  , category , name       , socket, ddr, warrantyPeriod, stock
+25  , CPU      , intel_i9   , l300  , 0  , 10            , 2
+21  , RAM      , ram8       , 0     , 4  , 9             , 4
+23  , CPU      , ryzen_r7   , p150  , 0  , 8             , 5
+16  , RAM      , ram16      , 0     , 5  , 7             , 2
+1   , CPU      , intel_i7   , l200  , 0  , 6             , 28
+5   , SSD      , samsung256 , 0     , 0  , 6             , 18
+8   , CPU      , intel_i5   , l100  , 0  , 6             , 10
+22  , CPU      , chip       , l170  , 0  , 6             , 6
+24  , RAM      , ram16      , 0     , 5  , 6             , 4
+6   , GPU      , rtx3035    , 0     , 0  , 6             , 4
+14  , SSD      , ssd256     , 0     , 0  , 6             , 0
+2   , MAINBOARD, asus       , l200  , 5  , 6             , 0
+3   , PSU      , asrock     , 0     , 0  , 6             , 0
+7   , CASE     , case1      , 0     , 0  , 6             , 0
+10  , CPU      , intel_i5   , l100  , 0  , 6             , 0
+18  , PSU      , nguon1     , 0     , 0  , 5             , 14
+20  , SSD      , ssd256     , 0     , 0  , 5             , 8
+13  , MAINBOARD, main3      , i400  , 4  , 5             , 5
+12  , MAINBOARD, main1      , i450  , 4  , 5             , 3
+9   , RAM      , samsung4   , 0     , 0  , 4             , 10
+15  , CPU      , xeon250    , w12   , 0  , 4             , 5
+25  , CPU      , ryzen5     , p150  , 0  , 4             , 1
+4   , RAM      , samsung16  , 0     , 0  , 3             , 16
+26  , RAM      , kingston_32, 0     , 5  , 2             , 10
+11  , CPU      , snapX      , i450  , 0  , 2             , 1
+19  , RAM      , ram4       , 0     , 4  , 1             , 10

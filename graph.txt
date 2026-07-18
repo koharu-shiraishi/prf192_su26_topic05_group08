@@ -1,0 +1,45 @@
+💾 MEMORY SPACE (Passive Data Structs - Accidental Flow Nodes)
+├── struct componentPC [Contains: id, name, type, price, quantity]
+└── struct componentPCManager [Contains: componentPC array, total count]
+
+========================================================================
+
+CONTROL FLOW (The Actual Program Execution Paths)
+│
+⚡ main() / Start
+└─── 🖥️ System Main Menu
+     │
+     ├───► [Leg A: Linh Kiện / Inventory Domain]
+     │     │
+     │     ├───► Chức năng 1: Thêm linh kiện
+     │     │     └───► Action: Nhập dữ liệu linh kiện từ bàn phím
+     │     │           └───► 🛑 [BUG: Execution path shoots straight into 'struct componentPC']
+     │     │                 └───► 🛑 [BUG: Dead End - No return path back to Main Menu]
+     │     │
+     │     ├───► Chức năng 2: Cập nhật số lượng tồn kho
+     │     │     └───► Action: Tìm ID -> Thay đổi số lượng
+     │     │           └───► 🛑 [BUG: Arrow loops backward through a data model node]
+     │     │
+     │     ├───► Chức năng 3: Tìm kiếm sản phẩm theo id và loại
+     │     │     └───► Action: Quét mảng dữ liệu trong RAM
+     │     │
+     │     └───► Chức năng 4: Theo dõi mức độ tồn kho
+     │           └───► Action: Gọi hàm "Xem danh sách componentPC"
+     │                 └───► 🛑 [BUG: Data flow line intersects diagonally with leg B]
+     │
+     └───► [Leg B: Hóa Đơn / Invoice Domain]
+           │
+           └───► Chức năng 5: Tạo đơn hàng lắp ráp mới
+                 │
+                 └───► Chức năng 6: Kiểm tra tương thích thiết bị trong hóa đơn
+                       │     └───► 🛑 [BUG: Missing logic diamond. Assumes 100% compatibility]
+                       │
+                       └───► Chức năng 7: Theo dõi và cập nhật tiến độ lắp ráp
+                             └───► Action: Cập nhật tiến độ mới 
+                                   │
+                                   ├───► 🛑 [CRITICAL ARCHITECTURAL BUG] 
+                                   │     The path runs sequentially downwards straight into exit!
+                                   │
+                                   └───► Chức năng 8: Thoát chương trình (Exit)
+                                         └───► 💾 Action: Lưu dữ liệu ra file (.txt / .dat)
+                                               └───► 🛑 System Termination (EOF)
