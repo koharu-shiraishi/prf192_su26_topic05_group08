@@ -1,193 +1,190 @@
-#include <stdio.h>
-#include <string.h>
+#include "component_manager.h"
+
+#include <stddef.h>
 #include <stdint.h>
-#include "pc_component_data.h"
-#include "pc_component_function.h"
-#include "pc_sort.h"
-#include "pc_search.h"
+#include <string.h>
 
-const char *category_names[CATEGORY_COUNT] = {
-	"CPU", "MAINBOARD", "PSU", "RAM", "SSD", "GPU", "CASE"};
+#include "component_validation.h"
 
-void component_mgr_init(struct component_manager *mgr_p)
+static enum component_status check_manager_bounds(
+	const struct component_manager *manager)
 {
-	if (!mgr_p)
-		return;
-	memset(mgr_p, 0, sizeof(*mgr_p));
-	mgr_p->count = 0;
-	mgr_p->next_id = 1;
+	if (manager == NULL)
+		return COMPONENT_STATUS_INVALID_ARGUMENT;
+	if (manager->count > COMPONENT_MAX_COUNT)
+		return COMPONENT_STATUS_CORRUPT_MANAGER;
+	return COMPONENT_STATUS_OK;
 }
 
-/* Helper: Sanitize field invariants right inside the data layer */
-static void sanitize_component_fields(struct pc_component *comp_p)
+enum component_status component_manager_init(struct component_manager *manager)
 {
-	if (!comp_p)
-		return;
-	if (comp_p->category != CPU && comp_p->category != MAINBOARD)
-	{
-		snprintf(comp_p->socket, sizeof(comp_p->socket), "N/A");
-	}
-	if (comp_p->category != MAINBOARD && comp_p->category != RAM)
-	{
-		comp_p->ddr = 0;
-	}
+	if (manager == NULL)
+		return COMPONENT_STATUS_INVALID_ARGUMENT;
+
+	memset(manager, 0, sizeof(*manager));
+	manager->next_id = 1U;
+	return COMPONENT_STATUS_OK;
 }
 
-int component_add_item(struct component_manager *mgr_p, const struct pc_component *new_comp_p)
+enum component_status component_manager_validate(
+	const struct component_manager *manager)
 {
-	if (!mgr_p || !new_comp_p)
-		return -1;
-	if (mgr_p->count >= MAXIMUM_COMPONENTS)
-		return -2;
-	if (new_comp_p->category >= CATEGORY_COUNT)
-		return -3;
+	enum component_status status = check_manager_bounds(manager);
 
-	struct pc_component *dest_p = &mgr_p->components[mgr_p->count];
-	memset(dest_p, 0, sizeof(*dest_p));
+	if (status != COMPONENT_STATUS_OK)
+		return status;
 
-	snprintf(dest_p->name, sizeof(dest_p->name), "%s", new_comp_p->name);
-	snprintf(dest_p->socket, sizeof(dest_p->socket), "%s", new_comp_p->socket);
+	for (size_t index = 0; index < manager->count; index++) {
+		const struct component *item = &manager->items[index];
 
-	dest_p->category = new_comp_p->category;
-	dest_p->ddr = new_comp_p->ddr;
-	dest_p->stock = new_comp_p->stock;
-	dest_p->warranty_period = new_comp_p->warranty_period;
+		if (item->id == 0U)
+			return COMPONENT_STATUS_INVALID_ID;
+		if (manager->next_id != 0U && item->id >= manager->next_id)
+			return COMPONENT_STATUS_CORRUPT_MANAGER;
 
-	sanitize_component_fields(dest_p);
+		status = component_validate_fields(item);
+		if (status != COMPONENT_STATUS_OK)
+			return status;
 
-	dest_p->id = mgr_p->next_id++;
-	mgr_p->count++;
-
-	return 0;
-}
-
-int component_update_item(struct component_manager *mgr_p, uint32_t id, const struct pc_component *updated_data)
-{
-	if (!mgr_p || !updated_data || id == 0)
-		return -2;
-	if (updated_data->category >= CATEGORY_COUNT)
-		return -3;
-
-	struct pc_component *target = component_find_by_id(mgr_p, id);
-	if (!target)
-		return -1;
-
-	snprintf(target->name, sizeof(target->name), "%s", updated_data->name);
-	snprintf(target->socket, sizeof(target->socket), "%s", updated_data->socket);
-
-	target->category = updated_data->category;
-	target->ddr = updated_data->ddr;
-	target->stock = updated_data->stock;
-	target->warranty_period = updated_data->warranty_period;
-
-	sanitize_component_fields(target);
-
-	return 0;
-}
-
-int component_delete_item(struct component_manager *mgr_p, uint32_t id)
-{
-	if (!mgr_p || id == 0)
-		return -2;
-
-	uint32_t target_index = MAXIMUM_COMPONENTS;
-	for (uint32_t i = 0; i < mgr_p->count; i++)
-	{
-		if (mgr_p->components[i].id == id)
-		{
-			target_index = i;
-			break;
+		for (size_t other = 0; other < index; other++) {
+			if (manager->items[other].id == item->id)
+				return COMPONENT_STATUS_DUPLICATE_ID;
 		}
 	}
 
-	if (target_index == MAXIMUM_COMPONENTS)
-		return -1;
+	return COMPONENT_STATUS_OK;
+}
 
-	for (uint32_t i = target_index; i < mgr_p->count - 1; i++)
-	{
-		mgr_p->components[i] = mgr_p->components[i + 1];
+enum component_status component_manager_add(
+	struct component_manager *manager,
+	const struct component *new_component,
+	uint32_t *created_id)
+{
+	struct component draft;
+	enum component_status status;
+	uint32_t assigned_id;
+
+	if (manager == NULL || new_component == NULL)
+		return COMPONENT_STATUS_INVALID_ARGUMENT;
+
+	/* Sao chép trước: new_component có thể nằm trong mảng manager. */
+	draft = *new_component;
+	status = component_manager_validate(manager);
+	if (status != COMPONENT_STATUS_OK)
+		return status;
+	if (manager->count == COMPONENT_MAX_COUNT)
+		return COMPONENT_STATUS_FULL;
+	if (manager->next_id == 0U)
+		return COMPONENT_STATUS_ID_EXHAUSTED;
+
+	status = component_validate_fields(&draft);
+	if (status != COMPONENT_STATUS_OK)
+		return status;
+
+	assigned_id = manager->next_id;
+	draft.id = assigned_id;
+	manager->items[manager->count] = draft;
+	manager->count++;
+	manager->next_id = assigned_id == UINT32_MAX ? 0U : assigned_id + 1U;
+	if (created_id != NULL)
+		*created_id = assigned_id;
+	return COMPONENT_STATUS_OK;
+}
+
+enum component_status component_manager_update(
+	struct component_manager *manager, uint32_t id,
+	const struct component *replacement)
+{
+	struct component draft;
+	enum component_status status;
+
+	if (manager == NULL || replacement == NULL)
+		return COMPONENT_STATUS_INVALID_ARGUMENT;
+	if (id == 0U)
+		return COMPONENT_STATUS_INVALID_ID;
+
+	/* Cho phép replacement chính là phần tử đang được sửa. */
+	draft = *replacement;
+	status = component_manager_validate(manager);
+	if (status != COMPONENT_STATUS_OK)
+		return status;
+	status = component_validate_fields(&draft);
+	if (status != COMPONENT_STATUS_OK)
+		return status;
+
+	for (size_t index = 0; index < manager->count; index++) {
+		if (manager->items[index].id == id) {
+			draft.id = id;
+			manager->items[index] = draft;
+			return COMPONENT_STATUS_OK;
+		}
 	}
-
-	mgr_p->count--;
-	memset(&mgr_p->components[mgr_p->count], 0, sizeof(struct pc_component));
-
-	return 0;
+	return COMPONENT_STATUS_NOT_FOUND;
 }
 
-struct pc_component *component_find_by_id(struct component_manager *mgr_p, uint32_t id)
+enum component_status component_manager_delete(
+	struct component_manager *manager, uint32_t id)
 {
-	if (!mgr_p || id == 0)
-		return NULL;
-	for (uint32_t i = 0; i < mgr_p->count; i++)
-	{
-		if (mgr_p->components[i].id == id)
-			return &mgr_p->components[i];
+	enum component_status status;
+
+	if (manager == NULL)
+		return COMPONENT_STATUS_INVALID_ARGUMENT;
+	if (id == 0U)
+		return COMPONENT_STATUS_INVALID_ID;
+	status = component_manager_validate(manager);
+	if (status != COMPONENT_STATUS_OK)
+		return status;
+
+	for (size_t index = 0; index < manager->count; index++) {
+		if (manager->items[index].id != id)
+			continue;
+		for (size_t next = index + 1U; next < manager->count; next++)
+			manager->items[next - 1U] = manager->items[next];
+		manager->count--;
+		memset(&manager->items[manager->count], 0,
+		       sizeof(manager->items[manager->count]));
+		return COMPONENT_STATUS_OK;
 	}
-	return NULL;
+	return COMPONENT_STATUS_NOT_FOUND;
 }
 
-struct pc_component *component_get_by_index(struct component_manager *mgr_p, uint32_t index)
+enum component_status component_manager_get_by_id(
+	const struct component_manager *manager, uint32_t id,
+	struct component *output)
 {
-	if (!mgr_p || index >= mgr_p->count)
-		return NULL;
-	return &mgr_p->components[index];
+	enum component_status status;
+
+	if (output == NULL)
+		return COMPONENT_STATUS_INVALID_ARGUMENT;
+	status = check_manager_bounds(manager);
+	if (status != COMPONENT_STATUS_OK)
+		return status;
+	if (id == 0U)
+		return COMPONENT_STATUS_INVALID_ID;
+
+	for (size_t index = 0; index < manager->count; index++) {
+		if (manager->items[index].id == id) {
+			*output = manager->items[index];
+			return COMPONENT_STATUS_OK;
+		}
+	}
+	return COMPONENT_STATUS_NOT_FOUND;
 }
 
-/* --- Comparator Functions & Sorting --- */
-
-/* Standard 3-way comparator (<0, 0, >0) for DESCENDING stock order */
-static int compare_stock_desc(const struct pc_component *a_p, const struct pc_component *b_p)
+enum component_status component_manager_get_by_index(
+	const struct component_manager *manager, size_t index,
+	struct component *output)
 {
-	if (!a_p || !b_p)
-		return 0;
-	if (a_p->stock > b_p->stock)
-		return -1;
-	if (a_p->stock < b_p->stock)
-		return 1;
-	return 0;
-}
+	enum component_status status;
 
-/* Standard 3-way comparator (<0, 0, >0) for ASCENDING stock order */
-static int compare_stock_asc(const struct pc_component *a_p, const struct pc_component *b_p)
-{
-	if (!a_p || !b_p)
-		return 0;
-	if (a_p->stock < b_p->stock)
-		return -1;
-	if (a_p->stock > b_p->stock)
-		return 1;
-	return 0;
-}
+	if (output == NULL)
+		return COMPONENT_STATUS_INVALID_ARGUMENT;
+	status = check_manager_bounds(manager);
+	if (status != COMPONENT_STATUS_OK)
+		return status;
+	if (index >= manager->count)
+		return COMPONENT_STATUS_INDEX_OUT_OF_RANGE;
 
-/* Standard 3-way comparator (<0, 0, >0) for DESCENDING warranty order */
-static int compare_period_desc(const struct pc_component *a_p, const struct pc_component *b_p)
-{
-	if (!a_p || !b_p)
-		return 0;
-	if (a_p->warranty_period > b_p->warranty_period)
-		return -1;
-	if (a_p->warranty_period < b_p->warranty_period)
-		return 1;
-	return 0;
-}
-
-void component_sort_by_stock_desc(struct component_manager *mgr_p)
-{
-	if (!mgr_p || mgr_p->count <= 1)
-		return;
-	universal_merge_sort(mgr_p->components, 0, (int)(mgr_p->count - 1), compare_stock_desc);
-}
-
-void component_sort_by_stock_asc(struct component_manager *mgr_p)
-{
-	if (!mgr_p || mgr_p->count <= 1)
-		return;
-	universal_merge_sort(mgr_p->components, 0, (int)(mgr_p->count - 1), compare_stock_asc);
-}
-
-void component_sort_by_period_desc(struct component_manager *mgr_p)
-{
-	if (!mgr_p || mgr_p->count <= 1)
-		return;
-	universal_merge_sort(mgr_p->components, 0, (int)(mgr_p->count - 1), compare_period_desc);
+	*output = manager->items[index];
+	return COMPONENT_STATUS_OK;
 }
