@@ -1,60 +1,65 @@
-#include <string.h>
-#include <ctype.h>
-#include "pc_search.h"
+#include "component_search.h"
 
-/*
- * Hàm tìm kiếm chuỗi con không phân biệt hoa/thường (Case-insensitive substring check).
- * Tương thích hoàn toàn trên cả Windows (msvcrt) và Linux (glibc).
- */
-static const char *str_istr(const char *haystack, const char *needle)
+#include <stdbool.h>
+#include <stddef.h>
+
+#include "component_manager.h"
+
+static unsigned char ascii_lower(unsigned char character)
 {
-    if (!haystack || !needle)
-        return NULL;
-    if (*needle == '\0')
-        return haystack;
-
-    for (const char *h = haystack; *h != '\0'; h++)
-    {
-        const char *h_sub = h;
-        const char *n_sub = needle;
-
-        while (*h_sub != '\0' && *n_sub != '\0' &&
-               tolower((unsigned char)*h_sub) == tolower((unsigned char)*n_sub))
-        {
-            h_sub++;
-            n_sub++;
-        }
-
-        if (*n_sub == '\0')
-            return h; /* Tìm thấy chuỗi con khớp */
-    }
-
-    return NULL;
+	if (character >= 'A' && character <= 'Z')
+		return (unsigned char)(character + ('a' - 'A'));
+	return character;
 }
 
-void pc_linear_search_by_name(const struct pc_component arr[], unsigned int count,
-                              const char *keyword,
-                              void (*display_func)(const struct pc_component *))
+static bool is_ascii_space(unsigned char character)
 {
-    if (!arr || count == 0 || !keyword || !display_func)
-        return;
+	return character == ' ' || character == '\t' || character == '\n' ||
+		character == '\r' || character == '\f' || character == '\v';
+}
 
-    int found = 0;
-    for (unsigned int i = 0; i < count; i++)
-    {
-        /*
-         * Sử dụng tìm kiếm không phân biệt hoa thường để người dùng gõ
-         * "rtx", "Intel", hay "DDR5" đều tìm được chính xác.
-         */
-        if (str_istr(arr[i].name, keyword) != NULL)
-        {
-            display_func(&arr[i]); /* Bắn dữ liệu về cho UI in ra */
-            found = 1;
-        }
-    }
+static bool contains_search_text(const char *name, const char *keyword)
+{
+	const unsigned char *text = (const unsigned char *)name;
+	const unsigned char *term = (const unsigned char *)keyword;
 
-    if (!found)
-    {
-        /* Có thể xử lý hoặc callback báo không tìm thấy nếu cần */
-    }
+	for (size_t start = 0; text[start] != '\0'; start++) {
+		size_t offset = 0;
+
+		while (term[offset] != '\0' && text[start + offset] != '\0' &&
+		       ascii_lower(term[offset]) == ascii_lower(text[start + offset]))
+			offset++;
+		if (term[offset] == '\0')
+			return true;
+	}
+	return false;
+}
+
+enum component_status component_search_by_name(
+	const struct component_manager *manager, const char *keyword,
+	struct component_search_results *results)
+{
+	struct component_search_results found = {0};
+	const unsigned char *cursor;
+	enum component_status status;
+
+	if (manager == NULL || keyword == NULL || results == NULL)
+		return COMPONENT_STATUS_INVALID_ARGUMENT;
+
+	cursor = (const unsigned char *)keyword;
+	while (is_ascii_space(*cursor))
+		cursor++;
+	if (*cursor == '\0')
+		return COMPONENT_STATUS_INVALID_SEARCH_TEXT;
+
+	status = component_manager_validate(manager);
+	if (status != COMPONENT_STATUS_OK)
+		return status;
+
+	for (size_t index = 0; index < manager->count; index++) {
+		if (contains_search_text(manager->items[index].name, keyword))
+			found.ids[found.count++] = manager->items[index].id;
+	}
+	*results = found;
+	return COMPONENT_STATUS_OK;
 }
