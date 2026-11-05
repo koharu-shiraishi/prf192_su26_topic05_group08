@@ -1,70 +1,85 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include "pc_sort.h"
+#include "component_sort.h"
 
-static void universal_merge(struct pc_component main_arr[], int left, int mid, int right,
-							int (*compare)(const struct pc_component *, const struct pc_component *))
+#include <stdbool.h>
+#include <stddef.h>
+
+#include "component_manager.h"
+
+static unsigned char ascii_lower(unsigned char character)
 {
-	int first_half = mid - left + 1;
-	int second_half = right - mid;
-
-	/*
-	 * Cấp phát heap (malloc) thay vì Variable Length Arrays (VLAs) trên stack.
-	 * Tránh vi phạm Linux kernel style (-Wvla) và chống lỗi tràn stack (Stack Overflow).
-	 */
-	struct pc_component *L = (struct pc_component *)malloc((size_t)first_half * sizeof(struct pc_component));
-	struct pc_component *R = (struct pc_component *)malloc((size_t)second_half * sizeof(struct pc_component));
-
-	if (!L || !R)
-	{
-		printf("Error: Memory allocation failed during sorting.\n");
-		free(L);
-		free(R);
-		return;
-	}
-
-	int i, j, k;
-	for (i = 0; i < first_half; i++)
-		L[i] = main_arr[left + i];
-	for (j = 0; j < second_half; j++)
-		R[j] = main_arr[mid + 1 + j];
-
-	i = 0;
-	j = 0;
-	k = left;
-	while (i < first_half && j < second_half)
-	{
-		/*
-		 * Kiểm tra <= 0 để tương thích với chuẩn C standard/Linux kernel comparator
-		 * (trả về <0 khi a < b, 0 khi a == b, >0 khi a > b).
-		 */
-		if (compare(&L[i], &R[j]) <= 0)
-			main_arr[k++] = L[i++];
-		else
-			main_arr[k++] = R[j++];
-	}
-
-	while (i < first_half)
-		main_arr[k++] = L[i++];
-	while (j < second_half)
-		main_arr[k++] = R[j++];
-
-	free(L);
-	free(R);
+	if (character >= 'A' && character <= 'Z')
+		return (unsigned char)(character + ('a' - 'A'));
+	return character;
 }
 
-/* Đã loại bỏ từ khóa static để cho phép các module khác gọi được khi liên kết (linking) */
-void universal_merge_sort(struct pc_component arr[], int left, int right,
-						  int (*compare)(const struct pc_component *, const struct pc_component *))
+static int compare_names(const char *left, const char *right)
 {
-	if (!arr || !compare)
-		return;
+	const unsigned char *first = (const unsigned char *)left;
+	const unsigned char *second = (const unsigned char *)right;
 
-	if (left < right)
-	{
-		int mid = left + (right - left) / 2;
-		universal_merge_sort(arr, left, mid, compare);
-		universal_merge_sort(arr, mid + 1, right, compare);
-		universal_merge(arr, left, mid, right, compare);
+	while (*first != '\0' && *second != '\0') {
+		unsigned char a = ascii_lower(*first);
+		unsigned char b = ascii_lower(*second);
+
+		if (a < b)
+			return -1;
+		if (a > b)
+			return 1;
+		first++;
+		second++;
 	}
+	if (*first == '\0' && *second == '\0')
+		return 0;
+	return *first == '\0' ? -1 : 1;
+}
+
+static int compare_components(const struct component *left,
+			      const struct component *right,
+			      enum component_sort_order order)
+{
+	switch (order) {
+	case COMPONENT_SORT_NAME_ASCENDING:
+		return compare_names(left->name, right->name);
+	case COMPONENT_SORT_STOCK_ASCENDING:
+		return (left->stock > right->stock) - (left->stock < right->stock);
+	case COMPONENT_SORT_STOCK_DESCENDING:
+		return (left->stock < right->stock) - (left->stock > right->stock);
+	case COMPONENT_SORT_WARRANTY_DESCENDING:
+		return (left->warranty_months < right->warranty_months) -
+			(left->warranty_months > right->warranty_months);
+	}
+	return 0;
+}
+
+enum component_status component_sort(
+	struct component_manager *manager, enum component_sort_order order,
+	bool *changed)
+{
+	enum component_status status;
+	bool moved = false;
+
+	if (manager == NULL || changed == NULL)
+		return COMPONENT_STATUS_INVALID_ARGUMENT;
+	if ((unsigned int)order > COMPONENT_SORT_WARRANTY_DESCENDING)
+		return COMPONENT_STATUS_INVALID_SORT_ORDER;
+	status = component_manager_validate(manager);
+	if (status != COMPONENT_STATUS_OK)
+		return status;
+
+	/* Chèn từng phần tử vào đoạn bên trái đã có thứ tự. */
+	for (size_t index = 1; index < manager->count; index++) {
+		struct component current = manager->items[index];
+		size_t position = index;
+
+		while (position > 0U &&
+		       compare_components(&manager->items[position - 1U],
+					  &current, order) > 0) {
+			manager->items[position] = manager->items[position - 1U];
+			position--;
+			moved = true;
+		}
+		manager->items[position] = current;
+	}
+	*changed = moved;
+	return COMPONENT_STATUS_OK;
 }
