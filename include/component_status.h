@@ -1,0 +1,35 @@
+#ifndef COMPONENT_STATUS_H
+#define COMPONENT_STATUS_H
+
+/*
+ * Kết quả dùng chung cho manager, validation, search và sort.
+ * So sánh bằng tên hằng số; không phụ thuộc số thứ tự của các lỗi.
+ */
+enum component_status {
+	COMPONENT_STATUS_OK = 0,
+	COMPONENT_STATUS_INVALID_ARGUMENT,
+	COMPONENT_STATUS_INVALID_ID,
+	COMPONENT_STATUS_NOT_FOUND,
+	COMPONENT_STATUS_INDEX_OUT_OF_RANGE,
+	COMPONENT_STATUS_FULL,
+	COMPONENT_STATUS_DUPLICATE_ID,
+	COMPONENT_STATUS_ID_EXHAUSTED,
+	COMPONENT_STATUS_CORRUPT_MANAGER,
+	COMPONENT_STATUS_INVALID_CATEGORY,
+	COMPONENT_STATUS_INVALID_NAME,
+	COMPONENT_STATUS_INVALID_SOCKET,
+	COMPONENT_STATUS_INVALID_DDR,
+	COMPONENT_STATUS_INVALID_STOCK,
+	COMPONENT_STATUS_INVALID_WARRANTY,
+	COMPONENT_STATUS_INVALID_NUMBER,
+	COMPONENT_STATUS_INVALID_SEARCH_TEXT,
+	COMPONENT_STATUS_INVALID_SORT_ORDER
+};
+
+/*
+ * Chuỗi trả về thuộc chương trình; người gọi không được sửa hoặc free.
+ * Nếu status không hợp lệ, trả thông báo lỗi không xác định, không NULL.
+ */
+const char *component_status_message(enum component_status status);
+
+#endif /* COMPONENT_STATUS_H */
