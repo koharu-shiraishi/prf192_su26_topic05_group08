@@ -1,24 +1,28 @@
+#include "component_app.h"
+
 #include <stdio.h>
-#include "pc_component_function.h"
-#include "pc_file.h"
+#include <stdlib.h>
 
-int main(void)
+int main(int argc, char *argv[])
 {
-    struct component_manager c_mgr;
+	const char *csv_path = "data/components.csv";
+	enum component_app_status status;
 
-    component_mgr_init(&c_mgr);
+	if (argc > 2) {
+		fprintf(stderr, "Usage: %s [path-to-components.csv]\n", argv[0]);
+		return EXIT_FAILURE;
+	}
+	if (argc == 2)
+		csv_path = argv[1];
 
-    printf("=== STEP 1: LOADING COMPONENTS ===\n");
-    file_load_components(&c_mgr);
-
-    printf("\n=== STEP 2: SHOW ALL COMPONENTS ===\n");
-    component_ui_show_all(&c_mgr);
-
-    printf("\n=== STEP 3: TRACK LOW STOCK ===\n");
-    component_ui_track_low_stock(&c_mgr);
-
-    printf("\n=== STEP 4: SAVING COMPONENTS BACK TO FILE ===\n");
-    file_save_components(&c_mgr);
-
-    return 0;
+	status = component_app_run(csv_path);
+	if (status == COMPONENT_APP_OK)
+		return EXIT_SUCCESS;
+	if (status == COMPONENT_APP_UNSAVED_ON_EOF)
+		return 2;
+	if (status == COMPONENT_APP_OUT_OF_MEMORY)
+		fprintf(stderr, "Could not allocate the component manager.\n");
+	else if (status == COMPONENT_APP_INVALID_ARGUMENT)
+		fprintf(stderr, "Invalid argument for the component module.\n");
+	return EXIT_FAILURE;
 }
